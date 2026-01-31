@@ -30,8 +30,8 @@
   #small{margin-top:10px;font-size:12px;opacity:.75}
 
   #hud{position:fixed;left:12px;right:12px;bottom:12px;display:flex;gap:10px;justify-content:space-between;z-index:5;pointer-events:none}
-  .pill{padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-        color:rgba(255,255,255,.78);font-size:12px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pill{padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+        color:rgba(255,255,255,.82);font-size:12px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -41,12 +41,11 @@
   <div id="card">
     <h1>DizzyGlitch</h1>
     <p>
-      Type a word/phrase (optional). It channel-flips through a built-in set of Internet Archive public-domain items.
-      Uses the smallest “512KB MPEG4” file when available.
+      Tap Start. It will immediately play a known-good demo video, then load Internet Archive channels in the background and start flipping.
     </p>
-    <input id="q" placeholder='Try: "night", "noir", "bus", "short", "avant", "comedy"' autocomplete="off" />
+    <input id="q" placeholder='Try: "night", "noir", "comedy", "bus", "short"' autocomplete="off" />
     <button id="start">Tap to Start</button>
-    <div id="small">iOS needs a tap. Videos are muted + inline.</div>
+    <div id="small">If anything breaks, the bottom-left status will show the error.</div>
   </div>
 </div>
 
@@ -56,27 +55,33 @@
 </div>
 
 <script>
-  // Built-in channels (all show “512KB MPEG4 download” on their item pages)
-  // We'll resolve the actual file name via the IA Metadata API: https://archive.org/metadata/:identifier
-  // (so we don’t guess filenames).   [oai_citation:1‡Internet Archive Blogs](https://blog.archive.org/2013/07/04/metadata-api/)
-  const CHANNELS = [
-    { id: "Oh_Mr.Porter_1937", title: "Oh, Mr. Porter! (1937)", tags: ["comedy","british","train","fog","night"] },
-    { id: "He_Walked_by_Night_1948", title: "He Walked by Night (1948)", tags: ["noir","night","police","city","dark"] },
-    { id: "Friday_the_Thirteenth_1933", title: "Friday the Thirteenth (1933)", tags: ["bus","british","drama","crash","dark"] },
-    { id: "RomanceSentimentale", title: "Romance Sentimentale (1930)", tags: ["short","avant","experimental","surreal","mood"] },
-  ];
-
-  // Always-works fallback
-  const FALLBACK = {
-    title: "Fallback (CC0 flower.mp4)",
-    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-    tags: ["demo"]
-  };
-
   const stage = document.getElementById("stage");
   const statusEl = document.getElementById("status");
   const nowEl = document.getElementById("now");
   const qEl = document.getElementById("q");
+
+  // Show JS errors on-screen (so we can fix fast)
+  window.onerror = (msg, src, line, col) => {
+    statusEl.textContent = `JS error: ${String(msg).slice(0, 80)} @${line}:${col}`;
+  };
+  window.onunhandledrejection = (e) => {
+    statusEl.textContent = `Promise error: ${String(e.reason).slice(0, 90)}`;
+  };
+
+  // Always-works fallback (this should ALWAYS show video immediately)
+  const FALLBACK = {
+    title: "flower (demo)",
+    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    tags: ["demo"]
+  };
+
+  // IA channels (we resolve filenames via metadata)
+  const CHANNELS = [
+    { id: "Oh_Mr.Porter_1937", title: "Oh, Mr. Porter! (1937)", tags: ["comedy","train","night","british"] },
+    { id: "He_Walked_by_Night_1948", title: "He Walked by Night (1948)", tags: ["noir","night","police","dark","city"] },
+    { id: "Friday_the_Thirteenth_1933", title: "Friday the Thirteenth (1933)", tags: ["bus","british","drama","dark"] },
+    { id: "RomanceSentimentale", title: "Romance Sentimentale (1930)", tags: ["short","avant","experimental","surreal"] },
+  ];
 
   let current = null;
   let running = false;
@@ -112,8 +117,8 @@
       .filter(o => tokens.length ? o.s > 0 : true);
 
     const pool = scored.length ? scored : base.map(x => ({x, s: 1}));
-
     const total = pool.reduce((a,b)=>a + (b.s || 1), 0);
+
     let r = Math.random() * total;
     for (const o of pool){
       r -= (o.s || 1);
@@ -125,8 +130,8 @@
   function makeVideo(src){
     const v = document.createElement("video");
     v.src = src;
-    v.muted = true;
-    v.playsInline = true;
+    v.muted = true;       // iOS autoplay requirement
+    v.playsInline = true; // stay inline
     v.autoplay = true;
     v.preload = "auto";
     return v;
@@ -135,11 +140,11 @@
   async function swapTo(item){
     const v = makeVideo(item.url);
 
-    v.onerror = async () => {
-      statusEl.textContent = "source error → skipping";
-      // remove bad clip from pool so we don’t keep selecting it
+    // If a clip errors, drop it from the pool and keep going
+    v.onerror = () => {
+      statusEl.textContent = "video error → skipping";
       playable = playable.filter(p => p.url !== item.url);
-      await swapTo(playable.length ? pickClip(tokenize(qEl.value)) : FALLBACK);
+      // keep looping; next tick will pick something else
     };
 
     v.addEventListener("loadedmetadata", () => {
@@ -162,11 +167,10 @@
     }
 
     nowEl.textContent = item.title;
-    try { await v.play(); } catch {}
+    try { await v.play(); } catch { /* ok; iOS can be picky */ }
   }
 
   function startMicroCuts(){
-    // stitchy / glitch vibe
     const tick = () => {
       if (!running || !current) return;
       const dur = Number.isFinite(current.duration) ? current.duration : 0;
@@ -178,45 +182,52 @@
     setTimeout(tick, randInt(250, 1200));
   }
 
-  async function resolveIAItem(channel){
-    // IA Metadata API returns JSON for an item: https://archive.org/metadata/:identifier
-    const metaUrl = `https://archive.org/metadata/${encodeURIComponent(channel.id)}`;
-    const res = await fetch(metaUrl, { headers: { "Accept": "application/json" } });
-    if (!res.ok) throw new Error("metadata fetch failed");
+  async function resolveIAItem(ch){
+    // metadata endpoint
+    const metaUrl = `https://archive.org/metadata/${encodeURIComponent(ch.id)}`;
+    const res = await fetch(metaUrl, { headers: { "Accept": "application/json" }});
+    if (!res.ok) throw new Error(`metadata ${ch.id} HTTP ${res.status}`);
+
     const data = await res.json();
     const files = Array.isArray(data.files) ? data.files : [];
 
-    // Prefer the tiniest “512KB MPEG4” derivative if present
-    // (Item pages show this option exists for these IDs.)  [oai_citation:2‡Internet Archive](https://archive.org/details/Oh_Mr.Porter_1937)
-    let f = files.find(x => (x.format || "").toLowerCase().includes("512kb mpeg4"));
-    if (!f) f = files.find(x => (x.name || "").toLowerCase().includes("512kb") && (x.name || "").toLowerCase().endsWith(".mp4"));
-    if (!f) f = files.find(x => (x.format || "").toLowerCase().includes("mpeg4") && (x.name || "").toLowerCase().endsWith(".mp4"));
+    // Prefer "512KB MPEG4" derivative (small, iPhone-friendly)
+    let f = files.find(x => String(x.format||"").toLowerCase().includes("512kb mpeg4"));
+    if (!f) f = files.find(x => String(x.name||"").toLowerCase().includes("512kb") && String(x.name||"").toLowerCase().endsWith(".mp4"));
+    if (!f) f = files.find(x => String(x.format||"").toLowerCase().includes("mpeg4") && String(x.name||"").toLowerCase().endsWith(".mp4"));
+    if (!f || !f.name) throw new Error(`no mp4 for ${ch.id}`);
 
-    if (!f || !f.name) throw new Error("no mp4 found");
-
-    const url = `https://archive.org/download/${encodeURIComponent(channel.id)}/${encodeURIComponent(f.name)}`;
-    return { title: channel.title, url, tags: channel.tags };
+    // IMPORTANT: Do NOT encode the whole filename with encodeURIComponent twice logic;
+    // we only encode each path segment once.
+    const fileName = encodeURIComponent(f.name);
+    const itemId = encodeURIComponent(ch.id);
+    const url = `https://archive.org/download/${itemId}/${fileName}`;
+    return { title: ch.title, url, tags: ch.tags };
   }
 
-  async function loadChannels(){
-    statusEl.textContent = "loading channels…";
+  async function loadChannelsInBackground(){
+    statusEl.textContent = "loading IA channels…";
     const out = [];
+
+    // Resolve sequentially (gentler on mobile + avoids rate issues)
     for (const ch of CHANNELS){
       try{
         const item = await resolveIAItem(ch);
         out.push(item);
-      } catch (e){
-        // skip quietly
+        statusEl.textContent = `loading IA channels… (${out.length})`;
+      }catch(e){
+        // show last failure briefly but continue
+        statusEl.textContent = `IA skip: ${String(e.message).slice(0, 40)}`;
       }
     }
+
     playable = out;
-    statusEl.textContent = playable.length ? `channels ready (${playable.length})` : "no channels → fallback only";
+    statusEl.textContent = playable.length ? `IA ready (${playable.length})` : "IA failed → demo only";
   }
 
   async function loop(){
     if (!running) return;
-    const tokens = tokenize(qEl.value);
-    const clip = pickClip(tokens);
+    const clip = pickClip(tokenize(qEl.value));
     await swapTo(clip);
     setTimeout(loop, randInt(2500, 9000));
   }
@@ -224,9 +235,19 @@
   document.getElementById("start").onclick = async () => {
     document.getElementById("overlay").remove();
     running = true;
+
+    // 1) IMMEDIATELY show something
+    statusEl.textContent = "starting (demo)…";
+    await swapTo(FALLBACK);
+
+    // 2) begin glitch cuts
     startMicroCuts();
-    await loadChannels();
-    await loop();
+
+    // 3) start flipping right away (even if only demo at first)
+    loop();
+
+    // 4) load IA in the background; once playable[] fills, loop() will start picking those
+    loadChannelsInBackground();
   };
 </script>
 </body>
