@@ -5,15 +5,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>DizzyGlitch</title>
 <style>
-html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui}
-#stage{position:fixed;inset:0}
-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.fade-in{animation:fi .6s ease-out forwards;opacity:0}
-.fade-out{animation:fo .6s ease-in forwards;opacity:1}
-@keyframes fi{to{opacity:1}} @keyframes fo{to{opacity:0}}
-#overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.85);color:#fff}
-button{background:#fff;color:#000;border:0;border-radius:12px;padding:14px 16px;font-weight:700}
-#hud{position:fixed;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.7)}
+  html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,sans-serif}
+  #stage{position:fixed;inset:0}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+  .fade-in{animation:fi .65s ease-out forwards;opacity:0}
+  .fade-out{animation:fo .65s ease-in forwards;opacity:1}
+  @keyframes fi{to{opacity:1}} @keyframes fo{to{opacity:0}}
+  #overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.85);color:#fff;z-index:10}
+  button{background:#fff;color:#000;border:0;border-radius:12px;padding:14px 16px;font-weight:700}
+  #hud{position:fixed;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;
+       font-size:12px;color:rgba(255,255,255,.7);pointer-events:none}
 </style>
 </head>
 <body>
@@ -23,51 +24,86 @@ button{background:#fff;color:#000;border:0;border-radius:12px;padding:14px 16px;
   <button id="start">Tap to Start</button>
 </div>
 
-<div id="hud">
+<div id="hud" aria-hidden="true">
   <div>DizzyGlitch</div>
-  <div>demo mode</div>
+  <div id="now">demo</div>
 </div>
 
 <script>
-const DEMO="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-const stage=document.getElementById("stage");
-const overlay=document.getElementById("overlay");
-let current=null;
+  // 3 CC0 demo videos (so you see variety immediately)
+  const DEMOS = [
+    "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/bee.mp4",
+    "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/river.mp4"
+  ];
 
-function rand(min,max){return Math.random()*(max-min)+min}
+  const stage = document.getElementById("stage");
+  const now = document.getElementById("now");
+  let current = null;
 
-function show(){
-  const v=document.createElement("video");
-  v.src=DEMO;
-  v.muted=true;
-  v.playsInline=true;
-  v.autoplay=true;
+  const randInt = (min,max)=>Math.floor(Math.random()*(max-min+1))+min;
+  const randFloat = (min,max)=>Math.random()*(max-min)+min;
 
-  v.addEventListener("loadedmetadata",()=>{
-    if(v.duration>3){
-      v.currentTime=rand(0,Math.max(0,v.duration-2));
-    }
-  },{once:true});
-
-  if(current){
-    v.classList.add("fade-in");
-    current.classList.add("fade-out");
-    stage.appendChild(v);
-    const old=current;
-    current=v;
-    setTimeout(()=>old.remove(),700);
-  }else{
-    stage.appendChild(v);
-    current=v;
+  function makeVideo(src){
+    const v=document.createElement("video");
+    v.src=src;
+    v.muted=true;
+    v.playsInline=true;
+    v.autoplay=true;
+    v.preload="auto";
+    return v;
   }
 
-  setTimeout(show, rand(2500,9000));
-}
+  async function showNext(){
+    const src = DEMOS[randInt(0, DEMOS.length-1)];
+    const label = src.split("/").pop();
+    const v = makeVideo(src);
 
-document.getElementById("start").onclick=()=>{
-  overlay.remove();
-  show();
-};
+    v.addEventListener("loadedmetadata", ()=>{
+      const dur = Number.isFinite(v.duration) ? v.duration : 0;
+      if (dur > 4) {
+        // start somewhere random
+        try { v.currentTime = randFloat(0, Math.max(0, dur - 2)); } catch {}
+      }
+    }, {once:true});
+
+    if (!current){
+      stage.appendChild(v);
+      current = v;
+    } else {
+      v.classList.add("fade-in");
+      current.classList.add("fade-out");
+      stage.appendChild(v);
+      const old = current;
+      current = v;
+      setTimeout(()=>{ try{old.pause()}catch{} old.remove(); }, 750);
+    }
+
+    now.textContent = label;
+    try { await v.play(); } catch {}
+
+    // Hold a bit, then switch sources (“channel flip”)
+    setTimeout(showNext, randInt(2500, 9000));
+  }
+
+  function startMicroCuts(){
+    // “stitchy” feel: jump to a random moment every ~0.2–1.0 seconds
+    const tick = () => {
+      if (!current) return;
+      const dur = Number.isFinite(current.duration) ? current.duration : 0;
+      if (dur > 4){
+        try { current.currentTime = randFloat(0, Math.max(0, dur - 1.5)); } catch {}
+      }
+      setTimeout(tick, randInt(200, 1000));
+    };
+    setTimeout(tick, randInt(200, 1000));
+  }
+
+  document.getElementById("start").onclick = async () => {
+    document.getElementById("overlay").remove();
+    startMicroCuts();
+    await showNext();
+  };
 </script>
 </body>
 </html>
