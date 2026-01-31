@@ -41,14 +41,12 @@
   <div id="card">
     <h1>DizzyGlitch</h1>
     <p>
-      Type a word/phrase (optional). It pulls a built-in catalog of web videos and “channel flips” between matching clips.
-      First run downloads/cache-warms; after that it plays from cache to reduce buffering.
+      Type a word/phrase (optional). It channel-flips through a built-in set of Internet Archive public-domain items.
+      Uses the smallest “512KB MPEG4” file when available.
     </p>
-    <input id="q" placeholder='Try: "earth", "night", "map", "wind", "space"' autocomplete="off" />
+    <input id="q" placeholder='Try: "night", "noir", "bus", "short", "avant", "comedy"' autocomplete="off" />
     <button id="start">Tap to Start</button>
-    <div id="small">
-      iOS requires muted video + a tap to start. Videos are mostly MP4 (browser-friendly). 
-    </div>
+    <div id="small">iOS needs a tap. Videos are muted + inline.</div>
   </div>
 </div>
 
@@ -58,187 +56,178 @@
 </div>
 
 <script>
-/*
-  Catalog: “web videos we control” (direct MP4 URLs).
-  These example URLs are listed as downloadable MP4s on NASA SVS pages (small variants exist like 320x240). 
-  SVS notes they primarily release mp4/webm. Some SVS items warn that music/imagery may have restrictions—so we avoid those in the starter set.
-*/
-const CATALOG = [
-  {
-    title: "ICESat-2 beauty pass (320x240)",
-    url: "https://svs.gsfc.nasa.gov/vis/a010000/a011700/a011712/ICESat2__deploy_beauty_ipod_sm.mp4",
-    tags: ["space","satellite","orbit","earth","night","stars","deploy"]
-  },
-  {
-    title: "Artemis II mission map (720p)",
-    url: "https://svs.gsfc.nasa.gov/vis/a020000/a020400/a020412/jsc2025m000169_Artemis_II_Mission_Map_720.mp4",
-    tags: ["space","moon","map","trajectory","dark","night","orbit"]
-  },
-  {
-    title: "CO2 North America (320x240)",
-    url: "https://svs.gsfc.nasa.gov/vis/a010000/a011700/a011719/N_America-1280-MASTER_ipod_sm.mp4",
-    tags: ["earth","map","north america","data","wind","flow","pattern"]
-  },
-  {
-    title: "CO2 Africa (320x240)",
-    url: "https://svs.gsfc.nasa.gov/vis/a010000/a011700/a011719/Africa-1280-MASTER_ipod_sm.mp4",
-    tags: ["earth","map","africa","data","wind","flow","pattern","desert"]
-  },
-  {
-    title: "CO2 Himalayas (320x240)",
-    url: "https://svs.gsfc.nasa.gov/vis/a010000/a011700/a011719/Himalayas-1280-MASTER_ipod_sm.mp4",
-    tags: ["earth","mountains","himalayas","map","cold","wind","flow"]
-  }
-];
+  // Built-in channels (all show “512KB MPEG4 download” on their item pages)
+  // We'll resolve the actual file name via the IA Metadata API: https://archive.org/metadata/:identifier
+  // (so we don’t guess filenames).   [oai_citation:1‡Internet Archive Blogs](https://blog.archive.org/2013/07/04/metadata-api/)
+  const CHANNELS = [
+    { id: "Oh_Mr.Porter_1937", title: "Oh, Mr. Porter! (1937)", tags: ["comedy","british","train","fog","night"] },
+    { id: "He_Walked_by_Night_1948", title: "He Walked by Night (1948)", tags: ["noir","night","police","city","dark"] },
+    { id: "Friday_the_Thirteenth_1933", title: "Friday the Thirteenth (1933)", tags: ["bus","british","drama","crash","dark"] },
+    { id: "RomanceSentimentale", title: "Romance Sentimentale (1930)", tags: ["short","avant","experimental","surreal","mood"] },
+  ];
 
-// Fallback demo if a web source errors
-const FALLBACK = {
-  title: "Fallback demo (CC0 flower.mp4)",
-  url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-  tags: ["demo"]
-};
-
-const stage = document.getElementById("stage");
-const statusEl = document.getElementById("status");
-const nowEl = document.getElementById("now");
-const qEl = document.getElementById("q");
-
-let current = null;
-let running = false;
-
-const randInt = (min,max)=>Math.floor(Math.random()*(max-min+1))+min;
-const randFloat = (min,max)=>Math.random()*(max-min)+min;
-
-function tokenize(s){
-  return (s||"")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s']/g," ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 16);
-}
-
-function score(item, tokens){
-  if (!tokens.length) return 1;
-  const hay = (item.tags.join(" ") + " " + item.title).toLowerCase();
-  let hits = 0;
-  for (const t of tokens){
-    if (t.length < 3) continue;
-    if (hay.includes(t)) hits++;
-  }
-  return hits;
-}
-
-function pickClip(tokens){
-  const scored = CATALOG
-    .map(x => ({x, s: score(x, tokens)}))
-    .filter(o => tokens.length ? o.s > 0 : true);
-
-  const pool = scored.length ? scored : CATALOG.map(x => ({x, s: 1}));
-
-  // weighted random (more hits = more likely)
-  const total = pool.reduce((a,b)=>a + (b.s || 1), 0);
-  let r = Math.random() * total;
-  for (const o of pool){
-    r -= (o.s || 1);
-    if (r <= 0) return o.x;
-  }
-  return pool[pool.length - 1].x;
-}
-
-function makeVideo(src){
-  const v = document.createElement("video");
-  v.src = src;
-  v.muted = true;
-  v.playsInline = true;
-  v.autoplay = true;
-  v.preload = "auto";
-  return v;
-}
-
-async function swapTo(item){
-  const v = makeVideo(item.url);
-
-  // If this URL fails, immediately jump to fallback (and keep going)
-  v.onerror = async () => {
-    statusEl.textContent = "source error → fallback";
-    await swapTo(FALLBACK);
+  // Always-works fallback
+  const FALLBACK = {
+    title: "Fallback (CC0 flower.mp4)",
+    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    tags: ["demo"]
   };
 
-  v.addEventListener("loadedmetadata", () => {
-    const dur = Number.isFinite(v.duration) ? v.duration : 0;
-    if (dur > 4){
-      try { v.currentTime = randFloat(0, Math.max(0, dur - 2)); } catch {}
-    }
-  }, {once:true});
+  const stage = document.getElementById("stage");
+  const statusEl = document.getElementById("status");
+  const nowEl = document.getElementById("now");
+  const qEl = document.getElementById("q");
 
-  if (!current){
-    stage.appendChild(v);
-    current = v;
-  } else {
-    v.classList.add("fade-in");
-    current.classList.add("fade-out");
-    stage.appendChild(v);
-    const old = current;
-    current = v;
-    setTimeout(()=>{ try{old.pause()}catch{} old.remove(); }, 750);
+  let current = null;
+  let running = false;
+  let playable = []; // resolved {title,url,tags}
+
+  const randInt = (min,max)=>Math.floor(Math.random()*(max-min+1))+min;
+  const randFloat = (min,max)=>Math.random()*(max-min)+min;
+
+  function tokenize(s){
+    return (s||"")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s']/g," ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 18);
   }
 
-  nowEl.textContent = item.title;
-  try { await v.play(); } catch {}
-}
-
-function startMicroCuts(){
-  // stitched/cut-up feel (lightweight)
-  const tick = () => {
-    if (!running || !current) return;
-    const dur = Number.isFinite(current.duration) ? current.duration : 0;
-    if (dur > 4){
-      try { current.currentTime = randFloat(0, Math.max(0, dur - 1.5)); } catch {}
+  function score(item, tokens){
+    if (!tokens.length) return 1;
+    const hay = (item.tags.join(" ") + " " + item.title).toLowerCase();
+    let hits = 0;
+    for (const t of tokens){
+      if (t.length < 3) continue;
+      if (hay.includes(t)) hits++;
     }
+    return hits;
+  }
+
+  function pickClip(tokens){
+    const base = playable.length ? playable : [FALLBACK];
+    const scored = base
+      .map(x => ({x, s: score(x, tokens)}))
+      .filter(o => tokens.length ? o.s > 0 : true);
+
+    const pool = scored.length ? scored : base.map(x => ({x, s: 1}));
+
+    const total = pool.reduce((a,b)=>a + (b.s || 1), 0);
+    let r = Math.random() * total;
+    for (const o of pool){
+      r -= (o.s || 1);
+      if (r <= 0) return o.x;
+    }
+    return pool[pool.length - 1].x;
+  }
+
+  function makeVideo(src){
+    const v = document.createElement("video");
+    v.src = src;
+    v.muted = true;
+    v.playsInline = true;
+    v.autoplay = true;
+    v.preload = "auto";
+    return v;
+  }
+
+  async function swapTo(item){
+    const v = makeVideo(item.url);
+
+    v.onerror = async () => {
+      statusEl.textContent = "source error → skipping";
+      // remove bad clip from pool so we don’t keep selecting it
+      playable = playable.filter(p => p.url !== item.url);
+      await swapTo(playable.length ? pickClip(tokenize(qEl.value)) : FALLBACK);
+    };
+
+    v.addEventListener("loadedmetadata", () => {
+      const dur = Number.isFinite(v.duration) ? v.duration : 0;
+      if (dur > 4){
+        try { v.currentTime = randFloat(0, Math.max(0, dur - 2)); } catch {}
+      }
+    }, {once:true});
+
+    if (!current){
+      stage.appendChild(v);
+      current = v;
+    } else {
+      v.classList.add("fade-in");
+      current.classList.add("fade-out");
+      stage.appendChild(v);
+      const old = current;
+      current = v;
+      setTimeout(()=>{ try{old.pause()}catch{} old.remove(); }, 750);
+    }
+
+    nowEl.textContent = item.title;
+    try { await v.play(); } catch {}
+  }
+
+  function startMicroCuts(){
+    // stitchy / glitch vibe
+    const tick = () => {
+      if (!running || !current) return;
+      const dur = Number.isFinite(current.duration) ? current.duration : 0;
+      if (dur > 4){
+        try { current.currentTime = randFloat(0, Math.max(0, dur - 1.5)); } catch {}
+      }
+      setTimeout(tick, randInt(250, 1200));
+    };
     setTimeout(tick, randInt(250, 1200));
+  }
+
+  async function resolveIAItem(channel){
+    // IA Metadata API returns JSON for an item: https://archive.org/metadata/:identifier
+    const metaUrl = `https://archive.org/metadata/${encodeURIComponent(channel.id)}`;
+    const res = await fetch(metaUrl, { headers: { "Accept": "application/json" } });
+    if (!res.ok) throw new Error("metadata fetch failed");
+    const data = await res.json();
+    const files = Array.isArray(data.files) ? data.files : [];
+
+    // Prefer the tiniest “512KB MPEG4” derivative if present
+    // (Item pages show this option exists for these IDs.)  [oai_citation:2‡Internet Archive](https://archive.org/details/Oh_Mr.Porter_1937)
+    let f = files.find(x => (x.format || "").toLowerCase().includes("512kb mpeg4"));
+    if (!f) f = files.find(x => (x.name || "").toLowerCase().includes("512kb") && (x.name || "").toLowerCase().endsWith(".mp4"));
+    if (!f) f = files.find(x => (x.format || "").toLowerCase().includes("mpeg4") && (x.name || "").toLowerCase().endsWith(".mp4"));
+
+    if (!f || !f.name) throw new Error("no mp4 found");
+
+    const url = `https://archive.org/download/${encodeURIComponent(channel.id)}/${encodeURIComponent(f.name)}`;
+    return { title: channel.title, url, tags: channel.tags };
+  }
+
+  async function loadChannels(){
+    statusEl.textContent = "loading channels…";
+    const out = [];
+    for (const ch of CHANNELS){
+      try{
+        const item = await resolveIAItem(ch);
+        out.push(item);
+      } catch (e){
+        // skip quietly
+      }
+    }
+    playable = out;
+    statusEl.textContent = playable.length ? `channels ready (${playable.length})` : "no channels → fallback only";
+  }
+
+  async function loop(){
+    if (!running) return;
+    const tokens = tokenize(qEl.value);
+    const clip = pickClip(tokens);
+    await swapTo(clip);
+    setTimeout(loop, randInt(2500, 9000));
+  }
+
+  document.getElementById("start").onclick = async () => {
+    document.getElementById("overlay").remove();
+    running = true;
+    startMicroCuts();
+    await loadChannels();
+    await loop();
   };
-  setTimeout(tick, randInt(250, 1200));
-}
-
-async function warmCache(){
-  // Soft warm-up: fetch a couple items so later swaps are smoother.
-  // Service worker will cache them (cache-first).
-  statusEl.textContent = "warming cache…";
-  const picks = [...CATALOG].slice(0, Math.min(3, CATALOG.length));
-  for (const it of picks){
-    try { await fetch(it.url, {mode:"cors"}); } catch {}
-  }
-  statusEl.textContent = "running";
-}
-
-async function loop(){
-  if (!running) return;
-  const tokens = tokenize(qEl.value);
-  const clip = pickClip(tokens);
-  await swapTo(clip);
-  setTimeout(loop, randInt(2500, 9000));
-}
-
-// Register SW (cache videos + shell)
-async function registerSW(){
-  if (!("serviceWorker" in navigator)) return;
-  try{
-    await navigator.serviceWorker.register("./sw.js");
-  }catch{
-    // ok if it fails; app still runs
-  }
-}
-
-document.getElementById("start").onclick = async () => {
-  document.getElementById("overlay").remove();
-  running = true;
-
-  await registerSW();
-  startMicroCuts();
-  await warmCache();
-  await loop();
-};
 </script>
 </body>
 </html>
