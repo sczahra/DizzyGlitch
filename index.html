@@ -11,99 +11,234 @@
   .fade-in{animation:fi .65s ease-out forwards;opacity:0}
   .fade-out{animation:fo .65s ease-in forwards;opacity:1}
   @keyframes fi{to{opacity:1}} @keyframes fo{to{opacity:0}}
-  #overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.85);color:#fff;z-index:10}
-  button{background:#fff;color:#000;border:0;border-radius:12px;padding:14px 16px;font-weight:700}
-  #hud{position:fixed;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;
-       font-size:12px;color:rgba(255,255,255,.7);pointer-events:none}
+
+  #overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.86);color:#fff;z-index:10;padding:24px}
+  #card{max-width:640px;text-align:center}
+  h1{margin:0 0 10px;font-size:22px}
+  p{margin:0 0 14px;opacity:.9;line-height:1.35}
+  input{
+    width:min(520px, 92vw);
+    padding:12px 14px;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,.18);
+    background:rgba(0,0,0,.35);
+    color:#fff;
+    font-size:16px;
+    outline:none;
+  }
+  button{background:#fff;color:#000;border:0;border-radius:12px;padding:12px 14px;font-weight:700;margin-top:10px}
+  #small{margin-top:10px;font-size:12px;opacity:.75}
+
+  #hud{position:fixed;left:12px;right:12px;bottom:12px;display:flex;gap:10px;justify-content:space-between;z-index:5;pointer-events:none}
+  .pill{padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+        color:rgba(255,255,255,.78);font-size:12px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
 <div id="stage"></div>
 
 <div id="overlay">
-  <button id="start">Tap to Start</button>
+  <div id="card">
+    <h1>DizzyGlitch</h1>
+    <p>
+      Type a word/phrase (optional). It pulls a built-in catalog of web videos and “channel flips” between matching clips.
+      First run downloads/cache-warms; after that it plays from cache to reduce buffering.
+    </p>
+    <input id="q" placeholder='Try: "earth", "night", "map", "wind", "space"' autocomplete="off" />
+    <button id="start">Tap to Start</button>
+    <div id="small">
+      iOS requires muted video + a tap to start. Videos are mostly MP4 (browser-friendly). 
+    </div>
+  </div>
 </div>
 
 <div id="hud" aria-hidden="true">
-  <div>DizzyGlitch</div>
-  <div id="now">demo</div>
+  <div class="pill" id="status">ready</div>
+  <div class="pill" id="now">—</div>
 </div>
 
 <script>
-  // 3 CC0 demo videos (so you see variety immediately)
-  const DEMOS = [
-    "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-    "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/bee.mp4",
-    "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/river.mp4"
-  ];
-
-  const stage = document.getElementById("stage");
-  const now = document.getElementById("now");
-  let current = null;
-
-  const randInt = (min,max)=>Math.floor(Math.random()*(max-min+1))+min;
-  const randFloat = (min,max)=>Math.random()*(max-min)+min;
-
-  function makeVideo(src){
-    const v=document.createElement("video");
-    v.src=src;
-    v.muted=true;
-    v.playsInline=true;
-    v.autoplay=true;
-    v.preload="auto";
-    return v;
+/*
+  Catalog: “web videos we control” (direct MP4 URLs).
+  These example URLs are listed as downloadable MP4s on NASA SVS pages (small variants exist like 320x240). 
+  SVS notes they primarily release mp4/webm. Some SVS items warn that music/imagery may have restrictions—so we avoid those in the starter set.
+*/
+const CATALOG = [
+  {
+    title: "ICESat-2 beauty pass (320x240)",
+    url: "https://svs.gsfc.nasa.gov/vis/a010000/a011700/a011712/ICESat2__deploy_beauty_ipod_sm.mp4",
+    tags: ["space","satellite","orbit","earth","night","stars","deploy"]
+  },
+  {
+    title: "Artemis II mission map (720p)",
+    url: "https://svs.gsfc.nasa.gov/vis/a020000/a020400/a020412/jsc2025m000169_Artemis_II_Mission_Map_720.mp4",
+    tags: ["space","moon","map","trajectory","dark","night","orbit"]
+  },
+  {
+    title: "CO2 North America (320x240)",
+    url: "https://svs.gsfc.nasa.gov/vis/a010000/a011700/a011719/N_America-1280-MASTER_ipod_sm.mp4",
+    tags: ["earth","map","north america","data","wind","flow","pattern"]
+  },
+  {
+    title: "CO2 Africa (320x240)",
+    url: "https://svs.gsfc.nasa.gov/vis/a010000/a011700/a011719/Africa-1280-MASTER_ipod_sm.mp4",
+    tags: ["earth","map","africa","data","wind","flow","pattern","desert"]
+  },
+  {
+    title: "CO2 Himalayas (320x240)",
+    url: "https://svs.gsfc.nasa.gov/vis/a010000/a011700/a011719/Himalayas-1280-MASTER_ipod_sm.mp4",
+    tags: ["earth","mountains","himalayas","map","cold","wind","flow"]
   }
+];
 
-  async function showNext(){
-    const src = DEMOS[randInt(0, DEMOS.length-1)];
-    const label = src.split("/").pop();
-    const v = makeVideo(src);
+// Fallback demo if a web source errors
+const FALLBACK = {
+  title: "Fallback demo (CC0 flower.mp4)",
+  url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+  tags: ["demo"]
+};
 
-    v.addEventListener("loadedmetadata", ()=>{
-      const dur = Number.isFinite(v.duration) ? v.duration : 0;
-      if (dur > 4) {
-        // start somewhere random
-        try { v.currentTime = randFloat(0, Math.max(0, dur - 2)); } catch {}
-      }
-    }, {once:true});
+const stage = document.getElementById("stage");
+const statusEl = document.getElementById("status");
+const nowEl = document.getElementById("now");
+const qEl = document.getElementById("q");
 
-    if (!current){
-      stage.appendChild(v);
-      current = v;
-    } else {
-      v.classList.add("fade-in");
-      current.classList.add("fade-out");
-      stage.appendChild(v);
-      const old = current;
-      current = v;
-      setTimeout(()=>{ try{old.pause()}catch{} old.remove(); }, 750);
-    }
+let current = null;
+let running = false;
 
-    now.textContent = label;
-    try { await v.play(); } catch {}
+const randInt = (min,max)=>Math.floor(Math.random()*(max-min+1))+min;
+const randFloat = (min,max)=>Math.random()*(max-min)+min;
 
-    // Hold a bit, then switch sources (“channel flip”)
-    setTimeout(showNext, randInt(2500, 9000));
+function tokenize(s){
+  return (s||"")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s']/g," ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 16);
+}
+
+function score(item, tokens){
+  if (!tokens.length) return 1;
+  const hay = (item.tags.join(" ") + " " + item.title).toLowerCase();
+  let hits = 0;
+  for (const t of tokens){
+    if (t.length < 3) continue;
+    if (hay.includes(t)) hits++;
   }
+  return hits;
+}
 
-  function startMicroCuts(){
-    // “stitchy” feel: jump to a random moment every ~0.2–1.0 seconds
-    const tick = () => {
-      if (!current) return;
-      const dur = Number.isFinite(current.duration) ? current.duration : 0;
-      if (dur > 4){
-        try { current.currentTime = randFloat(0, Math.max(0, dur - 1.5)); } catch {}
-      }
-      setTimeout(tick, randInt(200, 1000));
-    };
-    setTimeout(tick, randInt(200, 1000));
+function pickClip(tokens){
+  const scored = CATALOG
+    .map(x => ({x, s: score(x, tokens)}))
+    .filter(o => tokens.length ? o.s > 0 : true);
+
+  const pool = scored.length ? scored : CATALOG.map(x => ({x, s: 1}));
+
+  // weighted random (more hits = more likely)
+  const total = pool.reduce((a,b)=>a + (b.s || 1), 0);
+  let r = Math.random() * total;
+  for (const o of pool){
+    r -= (o.s || 1);
+    if (r <= 0) return o.x;
   }
+  return pool[pool.length - 1].x;
+}
 
-  document.getElementById("start").onclick = async () => {
-    document.getElementById("overlay").remove();
-    startMicroCuts();
-    await showNext();
+function makeVideo(src){
+  const v = document.createElement("video");
+  v.src = src;
+  v.muted = true;
+  v.playsInline = true;
+  v.autoplay = true;
+  v.preload = "auto";
+  return v;
+}
+
+async function swapTo(item){
+  const v = makeVideo(item.url);
+
+  // If this URL fails, immediately jump to fallback (and keep going)
+  v.onerror = async () => {
+    statusEl.textContent = "source error → fallback";
+    await swapTo(FALLBACK);
   };
+
+  v.addEventListener("loadedmetadata", () => {
+    const dur = Number.isFinite(v.duration) ? v.duration : 0;
+    if (dur > 4){
+      try { v.currentTime = randFloat(0, Math.max(0, dur - 2)); } catch {}
+    }
+  }, {once:true});
+
+  if (!current){
+    stage.appendChild(v);
+    current = v;
+  } else {
+    v.classList.add("fade-in");
+    current.classList.add("fade-out");
+    stage.appendChild(v);
+    const old = current;
+    current = v;
+    setTimeout(()=>{ try{old.pause()}catch{} old.remove(); }, 750);
+  }
+
+  nowEl.textContent = item.title;
+  try { await v.play(); } catch {}
+}
+
+function startMicroCuts(){
+  // stitched/cut-up feel (lightweight)
+  const tick = () => {
+    if (!running || !current) return;
+    const dur = Number.isFinite(current.duration) ? current.duration : 0;
+    if (dur > 4){
+      try { current.currentTime = randFloat(0, Math.max(0, dur - 1.5)); } catch {}
+    }
+    setTimeout(tick, randInt(250, 1200));
+  };
+  setTimeout(tick, randInt(250, 1200));
+}
+
+async function warmCache(){
+  // Soft warm-up: fetch a couple items so later swaps are smoother.
+  // Service worker will cache them (cache-first).
+  statusEl.textContent = "warming cache…";
+  const picks = [...CATALOG].slice(0, Math.min(3, CATALOG.length));
+  for (const it of picks){
+    try { await fetch(it.url, {mode:"cors"}); } catch {}
+  }
+  statusEl.textContent = "running";
+}
+
+async function loop(){
+  if (!running) return;
+  const tokens = tokenize(qEl.value);
+  const clip = pickClip(tokens);
+  await swapTo(clip);
+  setTimeout(loop, randInt(2500, 9000));
+}
+
+// Register SW (cache videos + shell)
+async function registerSW(){
+  if (!("serviceWorker" in navigator)) return;
+  try{
+    await navigator.serviceWorker.register("./sw.js");
+  }catch{
+    // ok if it fails; app still runs
+  }
+}
+
+document.getElementById("start").onclick = async () => {
+  document.getElementById("overlay").remove();
+  running = true;
+
+  await registerSW();
+  startMicroCuts();
+  await warmCache();
+  await loop();
+};
 </script>
 </body>
 </html>
