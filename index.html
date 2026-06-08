@@ -1,254 +1,707 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>DizzyGlitch</title>
 <style>
-  html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,sans-serif}
-  #stage{position:fixed;inset:0}
-  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
-  .fade-in{animation:fi .65s ease-out forwards;opacity:0}
-  .fade-out{animation:fo .65s ease-in forwards;opacity:1}
-  @keyframes fi{to{opacity:1}} @keyframes fo{to{opacity:0}}
-
-  #overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.86);color:#fff;z-index:10;padding:24px}
-  #card{max-width:640px;text-align:center}
-  h1{margin:0 0 10px;font-size:22px}
-  p{margin:0 0 14px;opacity:.9;line-height:1.35}
-  input{
-    width:min(520px, 92vw);
-    padding:12px 14px;
-    border-radius:12px;
-    border:1px solid rgba(255,255,255,.18);
-    background:rgba(0,0,0,.35);
-    color:#fff;
-    font-size:16px;
-    outline:none;
+  :root {
+    --bg: #161c12;
+    --panel: #202619;
+    --panel-2: #11160f;
+    --gold: #d7bd73;
+    --green: #7dff5a;
+    --wood-1: #5b2b0f;
+    --wood-2: #9a521b;
+    --wood-3: #d6862d;
+    --shadow: rgba(0, 0, 0, .42);
   }
-  button{background:#fff;color:#000;border:0;border-radius:12px;padding:12px 14px;font-weight:700;margin-top:10px}
-  #small{margin-top:10px;font-size:12px;opacity:.75}
 
-  #hud{position:fixed;left:12px;right:12px;bottom:12px;display:flex;gap:10px;justify-content:space-between;z-index:5;pointer-events:none}
-  .pill{padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-        color:rgba(255,255,255,.82);font-size:12px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  * { box-sizing: border-box; }
+
+  html, body {
+    min-height: 100%;
+    margin: 0;
+    background:
+      radial-gradient(circle at 45% 15%, rgba(255, 230, 145, .08), transparent 28%),
+      linear-gradient(135deg, #222b19, #0d110c 70%);
+    color: #f6e8aa;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+
+  body { overflow-x: hidden; }
+
+  button, input, select { font: inherit; }
+
+  .app {
+    width: min(1500px, calc(100vw - 28px));
+    margin: 18px auto 24px;
+  }
+
+  .title {
+    text-align: center;
+    margin: 0 0 14px;
+    letter-spacing: .12em;
+    text-shadow: 0 4px 0 #000;
+  }
+
+  .title h1 {
+    margin: 0;
+    font-size: clamp(32px, 5vw, 74px);
+    line-height: .9;
+  }
+
+  .title p {
+    margin: 10px 0 0;
+    font-size: clamp(12px, 1.6vw, 22px);
+    color: #d8cd8e;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(620px, 1fr) 420px;
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .tv-wrap { min-width: 0; }
+
+  .console {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(255, 190, 73, .26), transparent 9%),
+      repeating-linear-gradient(0deg, transparent 0 8px, rgba(0, 0, 0, .12) 8px 10px),
+      linear-gradient(90deg, var(--wood-1), var(--wood-3) 22%, var(--wood-2) 50%, var(--wood-3) 78%, var(--wood-1));
+    border: 5px solid #2a1208;
+    border-radius: 12px;
+    box-shadow: 0 26px 0 rgba(0,0,0,.22), 0 26px 46px rgba(0,0,0,.55), inset 0 0 0 3px rgba(255, 206, 92, .28);
+    padding: 24px 22px 34px;
+    min-height: 620px;
+  }
+
+  .console::before,
+  .console::after {
+    content: "";
+    position: absolute;
+    height: 18px;
+    left: -12px;
+    right: -12px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #e68b2e, #4b210c);
+    border: 4px solid #2a1208;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.28);
+  }
+
+  .console::before { top: -18px; }
+  .console::after { bottom: -16px; }
+
+  .wood-trim {
+    height: 58px;
+    border: 4px solid #361708;
+    border-radius: 8px;
+    margin-bottom: 22px;
+    background:
+      radial-gradient(circle at center, rgba(255,218,118,.36) 0 15px, transparent 16px),
+      linear-gradient(90deg, transparent 6%, rgba(0,0,0,.25) 6% 7%, transparent 7% 93%, rgba(0,0,0,.25) 93% 94%, transparent 94%),
+      linear-gradient(180deg, rgba(255,255,255,.18), transparent),
+      linear-gradient(90deg, #6d310f, #b96521, #6d310f);
+  }
+
+  .tv-grid {
+    display: grid;
+    grid-template-columns: 135px minmax(320px, 1fr) 160px;
+    gap: 18px;
+    align-items: stretch;
+  }
+
+  .speaker {
+    border: 6px solid #3a1809;
+    border-radius: 12px 32px 12px 32px;
+    background:
+      linear-gradient(45deg, transparent 44%, rgba(255,221,128,.24) 45% 55%, transparent 56%),
+      linear-gradient(-45deg, transparent 44%, rgba(255,221,128,.24) 45% 55%, transparent 56%),
+      radial-gradient(circle, rgba(0,0,0,.33) 0 2px, transparent 3px),
+      #5b2b13;
+    background-size: 24px 24px, 24px 24px, 10px 10px, auto;
+    min-height: 390px;
+    box-shadow: inset 0 0 0 6px rgba(203, 140, 61, .35), inset 0 0 30px rgba(0,0,0,.55);
+  }
+
+  .crt-shell {
+    background: linear-gradient(135deg, #2c3327, #b4a16b 8%, #4e563f 14%, #0e120d 100%);
+    border: 7px solid #271107;
+    border-radius: 24px;
+    padding: 18px;
+    box-shadow: inset 0 0 0 3px rgba(255,237,168,.34), 0 12px 22px rgba(0,0,0,.42);
+    min-width: 0;
+  }
+
+  .screen {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border-radius: 58px / 42px;
+    background: #050805;
+    box-shadow: inset 0 0 55px rgba(0,0,0,.95), inset 0 0 0 10px rgba(255,255,255,.06);
+    isolation: isolate;
+  }
+
+  video {
+    position: absolute;
+    inset: -4%;
+    width: 108%;
+    height: 108%;
+    object-fit: cover;
+    filter: contrast(1.15) saturate(1.3);
+    transform: scale(1.02);
+  }
+
+  .screen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(180deg, rgba(255,255,255,.09) 0 1px, rgba(0,0,0,.18) 1px 4px),
+      radial-gradient(circle at center, transparent 42%, rgba(0,0,0,.56) 100%);
+    mix-blend-mode: overlay;
+  }
+
+  .screen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    pointer-events: none;
+    opacity: var(--noise, .35);
+    background-image:
+      linear-gradient(90deg, rgba(255,0,0,.18), transparent 7%, rgba(0,255,255,.12) 13%, transparent 19%),
+      repeating-radial-gradient(circle at 20% 40%, rgba(255,255,255,.14) 0 1px, transparent 1px 4px);
+    animation: staticShift .18s steps(2) infinite;
+  }
+
+  @keyframes staticShift {
+    0% { transform: translate(0, 0); }
+    50% { transform: translate(2px, -1px); }
+    100% { transform: translate(-1px, 2px); }
+  }
+
+  .glitch-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    opacity: var(--glitch, .45);
+    background:
+      linear-gradient(180deg, transparent 0 8%, rgba(0,255,90,.16) 9% 10%, transparent 11% 35%, rgba(255,0,90,.15) 36% 38%, transparent 39%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 1px, transparent 1px 11px);
+    transform: translateX(var(--rgbOffset, 3px));
+    animation: glitchJump 1.9s steps(4) infinite;
+  }
+
+  @keyframes glitchJump {
+    0%, 72%, 100% { clip-path: inset(0 0 0 0); transform: translateX(0); }
+    76% { clip-path: inset(12% 0 72% 0); transform: translateX(-9px); }
+    80% { clip-path: inset(52% 0 22% 0); transform: translateX(7px); }
+    84% { clip-path: inset(4% 0 81% 0); transform: translateX(-4px); }
+  }
+
+  .channel-osd {
+    position: absolute;
+    z-index: 10;
+    right: 8%;
+    top: 9%;
+    color: var(--green);
+    font-size: clamp(24px, 4vw, 42px);
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-shadow: 0 0 8px rgba(125,255,90,.85), 3px 0 0 rgba(0,80,20,.8);
+  }
+
+  .controls-built-in {
+    display: grid;
+    grid-template-rows: 82px 96px 1fr;
+    gap: 14px;
+  }
+
+  .meter,
+  .chan-box,
+  .knobs {
+    border: 5px solid #2f1508;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #2c1d0d, #0d0d08);
+    box-shadow: inset 0 0 0 3px rgba(255,206,104,.16);
+    padding: 10px;
+  }
+
+  .meter label, .chan-box label { display:block; color:#d4b56d; font-size: 14px; margin-bottom: 8px; }
+  .bars { display:flex; gap:4px; align-items:end; height:24px; }
+  .bar { width:8px; background:#80ff5f; box-shadow:0 0 6px rgba(128,255,95,.45); }
+  .bar:nth-child(n+7) { background:#ffd15a; }
+  .bar:nth-child(n+10) { background:#ff5e45; }
+
+  .chan-number { color:var(--green); font-size:42px; text-align:center; text-shadow:0 0 10px rgba(125,255,90,.8); }
+  .big-knob { width:76px; height:76px; margin: 8px auto; border-radius:50%; background: radial-gradient(circle at 32% 28%, #ffe3a1, #8b5b24 42%, #251006 70%); border:5px solid #1e0d05; box-shadow:0 0 0 4px #9b6625; }
+  .mini-buttons { display:grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .mini-buttons button { aspect-ratio: 1; border-radius:8px; border:3px solid #2b1207; background:#966225; color:#211; cursor:pointer; }
+  .vents { margin-top: 14px; display:grid; gap:7px; }
+  .vents span { height:9px; border-radius:99px; background:#271206; border-top:2px solid rgba(255,203,93,.2); }
+
+  .base-drawers { display:grid; grid-template-columns: 1fr 1.4fr 1fr; gap:18px; margin-top:22px; }
+  .drawer { height:80px; border:5px solid #351707; border-radius:8px; background:linear-gradient(180deg,#9d551b,#57250d); display:grid; place-items:center; color:#2b1308; font-size:28px; box-shadow: inset 0 0 0 4px rgba(255,210,115,.18); }
+
+  .panel {
+    background: linear-gradient(180deg, rgba(255,255,255,.04), transparent), var(--panel);
+    border: 4px solid rgba(232, 211, 139, .65);
+    border-radius: 18px;
+    padding: 18px 18px 20px;
+    box-shadow: 0 20px 38px rgba(0,0,0,.4), inset 0 0 0 3px rgba(0,0,0,.25);
+  }
+
+  .panel h2 {
+    text-align:center;
+    margin:0 0 18px;
+    letter-spacing:.12em;
+    color:#f5dc91;
+  }
+
+  .effect-row {
+    display:grid;
+    grid-template-columns: 24px 1fr 120px 48px;
+    gap:10px;
+    align-items:center;
+    margin: 10px 0;
+    font-size: 14px;
+  }
+
+  input[type="checkbox"] { width:20px; height:20px; accent-color:#9dfc5d; }
+  input[type="range"] { width:100%; accent-color:#d8bd72; }
+
+  .section {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 2px dashed rgba(216, 189, 114, .38);
+  }
+
+  .section label { display:block; margin-bottom: 8px; color:#f4df99; }
+
+  .time-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+  .time-btn,
+  .action-btn,
+  .source-btn {
+    border: 2px solid rgba(216, 189, 114, .6);
+    color:#f9e8aa;
+    background:#151a11;
+    border-radius:6px;
+    padding:10px 8px;
+    cursor:pointer;
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,.3);
+  }
+
+  .time-btn.active,
+  .action-btn.active {
+    color:#17210f;
+    background:#a7ff68;
+    border-color:#d9ff9f;
+    text-shadow:none;
+  }
+
+  .action-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  .source-controls { display:grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .source-controls input { min-width:0; background:#10140e; border:2px solid rgba(216,189,114,.5); color:#ffeeb4; border-radius:6px; padding:10px; }
+
+  .drop-zone {
+    margin-top:10px;
+    border:2px dashed rgba(216,189,114,.46);
+    padding:12px;
+    border-radius:10px;
+    font-size:12px;
+    color:#dcc98a;
+  }
+
+  .status-bar {
+    margin-top: 18px;
+    background:#10140e;
+    border:3px solid #2c321e;
+    border-radius:10px;
+    padding:12px 14px;
+    display:flex;
+    gap:12px;
+    align-items:center;
+    justify-content:space-between;
+    min-height:48px;
+  }
+
+  .now { color:#7dff5a; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .status { color:#ddcc8a; font-size:12px; }
+
+  .fx-vhs video { filter: contrast(calc(1 + var(--intensity) * .45)) saturate(calc(1 + var(--intensity) * .65)) hue-rotate(calc(var(--rgb) * 28deg)); }
+  .fx-pixel video { image-rendering: pixelated; transform: scale(calc(1.02 + var(--pixelate) * .045)); }
+  .fx-posterize video { filter: contrast(1.45) saturate(.9); }
+  .fx-bloom .screen { box-shadow: inset 0 0 55px rgba(0,0,0,.95), inset 0 0 0 10px rgba(255,255,255,.06), 0 0 calc(var(--bloom) * 32px) rgba(125,255,90,.24); }
+
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 1fr; }
+    .panel { max-width: 760px; margin: 0 auto; }
+  }
+
+  @media (max-width: 720px) {
+    .app { width: min(100vw - 14px, 1500px); margin-top: 10px; }
+    .console { padding:18px 12px 28px; min-height: auto; }
+    .tv-grid { grid-template-columns: 1fr; }
+    .speaker, .controls-built-in, .wood-trim, .base-drawers { display:none; }
+    .effect-row { grid-template-columns: 24px 1fr; }
+    .effect-row input[type="range"], .effect-row output { grid-column: 2; }
+  }
 </style>
 </head>
 <body>
-<div id="stage"></div>
+  <main class="app">
+    <header class="title">
+      <h1>✦ DIZZYGLITCH ✦</h1>
+      <p>CRT CHANNEL-SURFING VIDEO VISUALIZER</p>
+    </header>
 
-<div id="overlay">
-  <div id="card">
-    <h1>DizzyGlitch</h1>
-    <p>
-      Tap Start. It will immediately play a known-good demo video, then load Internet Archive channels in the background and start flipping.
-    </p>
-    <input id="q" placeholder='Try: "night", "noir", "comedy", "bus", "short"' autocomplete="off" />
-    <button id="start">Tap to Start</button>
-    <div id="small">If anything breaks, the bottom-left status will show the error.</div>
-  </div>
-</div>
+    <section class="layout">
+      <div class="tv-wrap">
+        <div class="console" id="console">
+          <div class="wood-trim"></div>
+          <div class="tv-grid">
+            <aside class="speaker" aria-hidden="true"></aside>
+            <div class="crt-shell">
+              <div class="screen" id="screen">
+                <video id="video" muted playsinline autoplay loop crossorigin="anonymous"></video>
+                <div class="glitch-layer" id="glitchLayer"></div>
+                <div class="channel-osd" id="channelOsd">CH 01</div>
+              </div>
+            </div>
+            <aside class="controls-built-in" aria-hidden="true">
+              <div class="meter"><label>COLOR</label><div class="bars" id="bars"></div></div>
+              <div class="chan-box"><label>CHANNEL</label><div class="chan-number" id="panelChannel">01</div></div>
+              <div class="knobs"><div class="big-knob"></div><div class="mini-buttons"><button></button><button></button><button></button></div><div class="vents"><span></span><span></span><span></span><span></span></div></div>
+            </aside>
+          </div>
+          <div class="base-drawers"><div class="drawer">●</div><div class="drawer">⌁</div><div class="drawer">●</div></div>
+        </div>
+        <div class="status-bar">
+          <div><div class="status" id="status">Ready</div><div class="now" id="nowPlaying">Now playing: demo channel</div></div>
+          <button class="source-btn" id="nextBtn">Change Channel</button>
+        </div>
+      </div>
 
-<div id="hud" aria-hidden="true">
-  <div class="pill" id="status">ready</div>
-  <div class="pill" id="now">—</div>
-</div>
+      <aside class="panel" aria-label="DizzyGlitch settings">
+        <h2>✦ EFFECTS ✦</h2>
+        <div id="effects"></div>
+
+        <div class="section">
+          <label for="intensity">INTENSITY <output id="intensityOut">70%</output></label>
+          <input id="intensity" type="range" min="0" max="100" value="70" />
+        </div>
+
+        <div class="section">
+          <label>CHANGE CHANNEL EVERY</label>
+          <div class="time-grid" id="timeGrid"></div>
+        </div>
+
+        <div class="section">
+          <label>ROYALTY-FREE SOURCE CLIPS</label>
+          <div class="source-controls">
+            <input id="searchTerm" value="retro night city" aria-label="Search term" />
+            <button class="source-btn" id="fetchPexels">Fetch Clips</button>
+          </div>
+          <input id="apiKey" placeholder="Optional Pexels API key" aria-label="Pexels API key" style="width:100%; margin-top:8px; background:#10140e; border:2px solid rgba(216,189,114,.5); color:#ffeeb4; border-radius:6px; padding:10px;" />
+          <div class="drop-zone">
+            No key needed for the built-in public-domain/CC0 demo channels. Add a Pexels API key only when you want live clip search.
+          </div>
+        </div>
+
+        <div class="section action-grid">
+          <button class="action-btn active" id="autoplayBtn">AUTOPLAY</button>
+          <button class="action-btn active" id="shuffleBtn">SHUFFLE</button>
+          <button class="action-btn active" id="muteBtn">MUTED</button>
+          <button class="action-btn" id="fullBtn">FULLSCREEN</button>
+        </div>
+      </aside>
+    </section>
+  </main>
 
 <script>
-  const stage = document.getElementById("stage");
+  const video = document.getElementById("video");
+  const screen = document.getElementById("screen");
+  const consoleEl = document.getElementById("console");
   const statusEl = document.getElementById("status");
-  const nowEl = document.getElementById("now");
-  const qEl = document.getElementById("q");
+  const nowPlaying = document.getElementById("nowPlaying");
+  const channelOsd = document.getElementById("channelOsd");
+  const panelChannel = document.getElementById("panelChannel");
+  const nextBtn = document.getElementById("nextBtn");
+  const effectsEl = document.getElementById("effects");
+  const timeGrid = document.getElementById("timeGrid");
+  const intensity = document.getElementById("intensity");
+  const intensityOut = document.getElementById("intensityOut");
+  const apiKey = document.getElementById("apiKey");
+  const searchTerm = document.getElementById("searchTerm");
 
-  // Show JS errors on-screen (so we can fix fast)
-  window.onerror = (msg, src, line, col) => {
-    statusEl.textContent = `JS error: ${String(msg).slice(0, 80)} @${line}:${col}`;
-  };
-  window.onunhandledrejection = (e) => {
-    statusEl.textContent = `Promise error: ${String(e.reason).slice(0, 90)}`;
-  };
+  const CHANNEL_TIMES = [3, 5, 10, 15, 20, 30];
+  let channelSeconds = 10;
+  let timer = null;
+  let channelIndex = 0;
+  let autoplay = true;
+  let shuffle = true;
 
-  // Always-works fallback (this should ALWAYS show video immediately)
-  const FALLBACK = {
-    title: "flower (demo)",
-    url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-    tags: ["demo"]
-  };
-
-  // IA channels (we resolve filenames via metadata)
-  const CHANNELS = [
-    { id: "Oh_Mr.Porter_1937", title: "Oh, Mr. Porter! (1937)", tags: ["comedy","train","night","british"] },
-    { id: "He_Walked_by_Night_1948", title: "He Walked by Night (1948)", tags: ["noir","night","police","dark","city"] },
-    { id: "Friday_the_Thirteenth_1933", title: "Friday the Thirteenth (1933)", tags: ["bus","british","drama","dark"] },
-    { id: "RomanceSentimentale", title: "Romance Sentimentale (1930)", tags: ["short","avant","experimental","surreal"] },
+  const builtInChannels = [
+    {
+      title: "CC0 Flower Demo",
+      url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      source: "MDN CC0 sample"
+    },
+    {
+      title: "Sintel Trailer",
+      url: "https://media.w3.org/2010/05/sintel/trailer.mp4",
+      source: "Blender Foundation open movie trailer"
+    },
+    {
+      title: "Big Buck Bunny Trailer",
+      url: "https://media.w3.org/2010/05/bunny/trailer.mp4",
+      source: "Blender Foundation open movie trailer"
+    }
   ];
 
-  let current = null;
-  let running = false;
-  let playable = []; // resolved {title,url,tags}
+  let channels = [...builtInChannels];
 
-  const randInt = (min,max)=>Math.floor(Math.random()*(max-min+1))+min;
-  const randFloat = (min,max)=>Math.random()*(max-min)+min;
+  const effects = [
+    { key: "glitch", label: "GLITCH", value: 60, active: true },
+    { key: "vhs", label: "VHS", value: 75, active: true },
+    { key: "scan", label: "SCANLINES", value: 70, active: true },
+    { key: "pixel", label: "PIXELATE", value: 40, active: true },
+    { key: "rgb", label: "RGB SPLIT", value: 45, active: true },
+    { key: "noise", label: "NOISE", value: 35, active: true },
+    { key: "posterize", label: "POSTERIZE", value: 20, active: false },
+    { key: "bloom", label: "CRT BLOOM", value: 50, active: true }
+  ];
 
-  function tokenize(s){
-    return (s||"")
-      .toLowerCase()
-      .replace(/[^a-z0-9\s']/g," ")
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 18);
+  function padChannel(n) {
+    return String(n).padStart(2, "0");
   }
 
-  function score(item, tokens){
-    if (!tokens.length) return 1;
-    const hay = (item.tags.join(" ") + " " + item.title).toLowerCase();
-    let hits = 0;
-    for (const t of tokens){
-      if (t.length < 3) continue;
-      if (hay.includes(t)) hits++;
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  function renderBars() {
+    const bars = document.getElementById("bars");
+    bars.innerHTML = "";
+    for (let i = 1; i <= 12; i++) {
+      const bar = document.createElement("span");
+      bar.className = "bar";
+      bar.style.height = `${8 + i * 2}px`;
+      bars.appendChild(bar);
     }
-    return hits;
   }
 
-  function pickClip(tokens){
-    const base = playable.length ? playable : [FALLBACK];
-    const scored = base
-      .map(x => ({x, s: score(x, tokens)}))
-      .filter(o => tokens.length ? o.s > 0 : true);
+  function renderEffects() {
+    effectsEl.innerHTML = "";
+    effects.forEach(effect => {
+      const row = document.createElement("div");
+      row.className = "effect-row";
 
-    const pool = scored.length ? scored : base.map(x => ({x, s: 1}));
-    const total = pool.reduce((a,b)=>a + (b.s || 1), 0);
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = effect.active;
+      checkbox.addEventListener("change", () => {
+        effect.active = checkbox.checked;
+        applyEffects();
+      });
 
-    let r = Math.random() * total;
-    for (const o of pool){
-      r -= (o.s || 1);
-      if (r <= 0) return o.x;
-    }
-    return pool[pool.length - 1].x;
+      const label = document.createElement("label");
+      label.textContent = effect.label;
+
+      const range = document.createElement("input");
+      range.type = "range";
+      range.min = "0";
+      range.max = "100";
+      range.value = effect.value;
+
+      const out = document.createElement("output");
+      out.textContent = `${effect.value}%`;
+
+      range.addEventListener("input", () => {
+        effect.value = Number(range.value);
+        out.textContent = `${effect.value}%`;
+        applyEffects();
+      });
+
+      row.append(checkbox, label, range, out);
+      effectsEl.appendChild(row);
+    });
   }
 
-  function makeVideo(src){
-    const v = document.createElement("video");
-    v.src = src;
-    v.muted = true;       // iOS autoplay requirement
-    v.playsInline = true; // stay inline
-    v.autoplay = true;
-    v.preload = "auto";
-    return v;
+  function renderTimes() {
+    timeGrid.innerHTML = "";
+    CHANNEL_TIMES.forEach(seconds => {
+      const btn = document.createElement("button");
+      btn.className = "time-btn";
+      btn.textContent = `${seconds} SEC`;
+      if (seconds === channelSeconds) btn.classList.add("active");
+      btn.addEventListener("click", () => {
+        channelSeconds = seconds;
+        renderTimes();
+        scheduleNext();
+        setStatus(`Channel change timing set to ${seconds} seconds`);
+      });
+      timeGrid.appendChild(btn);
+    });
   }
 
-  async function swapTo(item){
-    const v = makeVideo(item.url);
+  function effectValue(key) {
+    const effect = effects.find(e => e.key === key);
+    return effect && effect.active ? effect.value / 100 : 0;
+  }
 
-    // If a clip errors, drop it from the pool and keep going
-    v.onerror = () => {
-      statusEl.textContent = "video error → skipping";
-      playable = playable.filter(p => p.url !== item.url);
-      // keep looping; next tick will pick something else
-    };
+  function applyEffects() {
+    const globalIntensity = Number(intensity.value) / 100;
+    intensityOut.textContent = `${intensity.value}%`;
 
-    v.addEventListener("loadedmetadata", () => {
-      const dur = Number.isFinite(v.duration) ? v.duration : 0;
-      if (dur > 4){
-        try { v.currentTime = randFloat(0, Math.max(0, dur - 2)); } catch {}
+    screen.style.setProperty("--noise", effectValue("noise") * globalIntensity);
+    screen.style.setProperty("--glitch", effectValue("glitch") * globalIntensity);
+    screen.style.setProperty("--rgbOffset", `${Math.round(effectValue("rgb") * 9)}px`);
+    screen.style.setProperty("--intensity", globalIntensity);
+    screen.style.setProperty("--pixelate", effectValue("pixel") * globalIntensity);
+    screen.style.setProperty("--rgb", effectValue("rgb") * globalIntensity);
+    screen.style.setProperty("--bloom", effectValue("bloom") * globalIntensity);
+
+    consoleEl.classList.toggle("fx-vhs", effectValue("vhs") > 0);
+    consoleEl.classList.toggle("fx-pixel", effectValue("pixel") > 0);
+    consoleEl.classList.toggle("fx-posterize", effectValue("posterize") > 0);
+    consoleEl.classList.toggle("fx-bloom", effectValue("bloom") > 0);
+  }
+
+  function chooseNextIndex() {
+    if (!channels.length) return 0;
+    if (!shuffle || channels.length === 1) return (channelIndex + 1) % channels.length;
+    let next = channelIndex;
+    while (next === channelIndex) next = Math.floor(Math.random() * channels.length);
+    return next;
+  }
+
+  async function changeChannel(forcedIndex) {
+    if (!channels.length) return;
+    channelIndex = typeof forcedIndex === "number" ? forcedIndex : chooseNextIndex();
+    const channel = channels[channelIndex];
+    const number = padChannel(channelIndex + 1);
+
+    channelOsd.textContent = `CH ${number}`;
+    panelChannel.textContent = number;
+    nowPlaying.textContent = `Now playing: ${channel.title}`;
+    setStatus(`${channel.source || "source"} • ${channelSeconds}s channel timer`);
+
+    video.pause();
+    video.src = channel.url;
+    video.load();
+
+    video.addEventListener("loadedmetadata", () => {
+      if (Number.isFinite(video.duration) && video.duration > 20) {
+        try { video.currentTime = Math.random() * Math.max(0, video.duration - 12); } catch {}
       }
-    }, {once:true});
+    }, { once: true });
 
-    if (!current){
-      stage.appendChild(v);
-      current = v;
-    } else {
-      v.classList.add("fade-in");
-      current.classList.add("fade-out");
-      stage.appendChild(v);
-      const old = current;
-      current = v;
-      setTimeout(()=>{ try{old.pause()}catch{} old.remove(); }, 750);
+    try { await video.play(); } catch {
+      setStatus("Tap the video or Change Channel if autoplay is blocked");
     }
 
-    nowEl.textContent = item.title;
-    try { await v.play(); } catch { /* ok; iOS can be picky */ }
+    scheduleNext();
   }
 
-  function startMicroCuts(){
-    const tick = () => {
-      if (!running || !current) return;
-      const dur = Number.isFinite(current.duration) ? current.duration : 0;
-      if (dur > 4){
-        try { current.currentTime = randFloat(0, Math.max(0, dur - 1.5)); } catch {}
-      }
-      setTimeout(tick, randInt(250, 1200));
-    };
-    setTimeout(tick, randInt(250, 1200));
+  function scheduleNext() {
+    clearTimeout(timer);
+    if (!autoplay) return;
+    timer = setTimeout(() => changeChannel(), channelSeconds * 1000);
   }
 
-  async function resolveIAItem(ch){
-    // metadata endpoint
-    const metaUrl = `https://archive.org/metadata/${encodeURIComponent(ch.id)}`;
-    const res = await fetch(metaUrl, { headers: { "Accept": "application/json" }});
-    if (!res.ok) throw new Error(`metadata ${ch.id} HTTP ${res.status}`);
-
-    const data = await res.json();
-    const files = Array.isArray(data.files) ? data.files : [];
-
-    // Prefer "512KB MPEG4" derivative (small, iPhone-friendly)
-    let f = files.find(x => String(x.format||"").toLowerCase().includes("512kb mpeg4"));
-    if (!f) f = files.find(x => String(x.name||"").toLowerCase().includes("512kb") && String(x.name||"").toLowerCase().endsWith(".mp4"));
-    if (!f) f = files.find(x => String(x.format||"").toLowerCase().includes("mpeg4") && String(x.name||"").toLowerCase().endsWith(".mp4"));
-    if (!f || !f.name) throw new Error(`no mp4 for ${ch.id}`);
-
-    // IMPORTANT: Do NOT encode the whole filename with encodeURIComponent twice logic;
-    // we only encode each path segment once.
-    const fileName = encodeURIComponent(f.name);
-    const itemId = encodeURIComponent(ch.id);
-    const url = `https://archive.org/download/${itemId}/${fileName}`;
-    return { title: ch.title, url, tags: ch.tags };
-  }
-
-  async function loadChannelsInBackground(){
-    statusEl.textContent = "loading IA channels…";
-    const out = [];
-
-    // Resolve sequentially (gentler on mobile + avoids rate issues)
-    for (const ch of CHANNELS){
-      try{
-        const item = await resolveIAItem(ch);
-        out.push(item);
-        statusEl.textContent = `loading IA channels… (${out.length})`;
-      }catch(e){
-        // show last failure briefly but continue
-        statusEl.textContent = `IA skip: ${String(e.message).slice(0, 40)}`;
-      }
+  async function fetchPexelsVideos() {
+    const key = apiKey.value.trim();
+    if (!key) {
+      setStatus("Paste a Pexels API key first, or keep using built-in clips");
+      return;
     }
 
-    playable = out;
-    statusEl.textContent = playable.length ? `IA ready (${playable.length})` : "IA failed → demo only";
+    localStorage.setItem("dizzyglitchPexelsKey", key);
+    const query = encodeURIComponent(searchTerm.value.trim() || "retro night city");
+    setStatus("Fetching royalty-free clips from Pexels…");
+
+    try {
+      const res = await fetch(`https://api.pexels.com/videos/search?query=${query}&per_page=12&orientation=landscape`, {
+        headers: { Authorization: key }
+      });
+      if (!res.ok) throw new Error(`Pexels HTTP ${res.status}`);
+      const data = await res.json();
+      const pexels = (data.videos || []).map((clip, index) => {
+        const file = [...(clip.video_files || [])]
+          .filter(f => f.file_type === "video/mp4")
+          .sort((a, b) => Math.abs((a.width || 0) - 1280) - Math.abs((b.width || 0) - 1280))[0];
+        return file ? {
+          title: `Pexels Channel ${index + 1}`,
+          url: file.link,
+          source: "Pexels"
+        } : null;
+      }).filter(Boolean);
+
+      if (!pexels.length) throw new Error("No playable MP4 clips returned");
+      channels = [...pexels, ...builtInChannels];
+      channelIndex = 0;
+      setStatus(`Loaded ${pexels.length} Pexels clips`);
+      changeChannel(0);
+    } catch (error) {
+      setStatus(`Pexels fetch failed: ${error.message}`);
+    }
   }
 
-  async function loop(){
-    if (!running) return;
-    const clip = pickClip(tokenize(qEl.value));
-    await swapTo(clip);
-    setTimeout(loop, randInt(2500, 9000));
+  function wireButtons() {
+    nextBtn.addEventListener("click", () => changeChannel());
+    intensity.addEventListener("input", applyEffects);
+    document.getElementById("fetchPexels").addEventListener("click", fetchPexelsVideos);
+
+    const autoplayBtn = document.getElementById("autoplayBtn");
+    autoplayBtn.addEventListener("click", () => {
+      autoplay = !autoplay;
+      autoplayBtn.classList.toggle("active", autoplay);
+      autoplay ? scheduleNext() : clearTimeout(timer);
+      setStatus(autoplay ? "Autoplay on" : "Autoplay off");
+    });
+
+    const shuffleBtn = document.getElementById("shuffleBtn");
+    shuffleBtn.addEventListener("click", () => {
+      shuffle = !shuffle;
+      shuffleBtn.classList.toggle("active", shuffle);
+      setStatus(shuffle ? "Shuffle on" : "Shuffle off");
+    });
+
+    const muteBtn = document.getElementById("muteBtn");
+    muteBtn.addEventListener("click", () => {
+      video.muted = !video.muted;
+      muteBtn.classList.toggle("active", video.muted);
+      muteBtn.textContent = video.muted ? "MUTED" : "SOUND ON";
+    });
+
+    document.getElementById("fullBtn").addEventListener("click", () => {
+      const target = document.querySelector(".app");
+      if (!document.fullscreenElement) target.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    });
   }
 
-  document.getElementById("start").onclick = async () => {
-    document.getElementById("overlay").remove();
-    running = true;
+  window.addEventListener("error", event => setStatus(`Error: ${String(event.message).slice(0, 70)}`));
+  window.addEventListener("unhandledrejection", event => setStatus(`Promise error: ${String(event.reason).slice(0, 70)}`));
 
-    // 1) IMMEDIATELY show something
-    statusEl.textContent = "starting (demo)…";
-    await swapTo(FALLBACK);
-
-    // 2) begin glitch cuts
-    startMicroCuts();
-
-    // 3) start flipping right away (even if only demo at first)
-    loop();
-
-    // 4) load IA in the background; once playable[] fills, loop() will start picking those
-    loadChannelsInBackground();
-  };
+  renderBars();
+  renderEffects();
+  renderTimes();
+  wireButtons();
+  apiKey.value = localStorage.getItem("dizzyglitchPexelsKey") || "";
+  applyEffects();
+  changeChannel(0);
 </script>
 </body>
 </html>
