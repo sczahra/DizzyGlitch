@@ -33,7 +33,7 @@
   }
 
   body { overflow-x: hidden; }
-  button, input { font: inherit; }
+  button, input, select { font: inherit; }
 
   .app { width: min(1500px, calc(100vw - 28px)); margin: 18px auto 24px; }
 
@@ -41,7 +41,7 @@
   .title h1 { margin: 0; font-size: clamp(32px, 5vw, 74px); line-height: .9; }
   .title p { margin: 10px 0 0; font-size: clamp(12px, 1.6vw, 22px); color: #d8cd8e; }
 
-  .layout { display: grid; grid-template-columns: minmax(620px, 1fr) 430px; gap: 24px; align-items: stretch; }
+  .layout { display: grid; grid-template-columns: minmax(620px, 1fr) 440px; gap: 24px; align-items: stretch; }
   .tv-wrap { min-width: 0; }
 
   .console {
@@ -200,15 +200,7 @@
     100% { opacity: 0; transform: scale(1); filter: brightness(1); }
   }
 
-  .black-flash {
-    position: absolute;
-    inset: 0;
-    z-index: 11;
-    pointer-events: none;
-    background: #020302;
-    opacity: 0;
-  }
-
+  .black-flash { position: absolute; inset: 0; z-index: 11; pointer-events: none; background: #020302; opacity: 0; }
   .screen.tuning .black-flash { animation: blackFlash .72s steps(3) forwards; }
   @keyframes blackFlash { 0%, 100% { opacity: 0; } 20%, 52% { opacity: .88; } 65% { opacity: .28; } }
 
@@ -252,15 +244,17 @@
   .section { margin-top: 18px; padding-top: 16px; border-top: 2px dashed rgba(216, 189, 114, .38); }
   .section label { display:block; margin-bottom: 8px; color:#f4df99; }
   .time-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .preset-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .preset-grid, .source-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 
-  .time-btn, .action-btn, .source-btn, .preset-btn { border: 2px solid rgba(216, 189, 114, .6); color:#f9e8aa; background:#151a11; border-radius:6px; padding:10px 8px; cursor:pointer; box-shadow: inset 0 0 0 2px rgba(0,0,0,.3); }
-  .time-btn.active, .action-btn.active, .preset-btn.active { color:#17210f; background:#a7ff68; border-color:#d9ff9f; text-shadow:none; }
+  .time-btn, .action-btn, .source-btn, .preset-btn, select { border: 2px solid rgba(216, 189, 114, .6); color:#f9e8aa; background:#151a11; border-radius:6px; padding:10px 8px; cursor:pointer; box-shadow: inset 0 0 0 2px rgba(0,0,0,.3); }
+  .time-btn.active, .action-btn.active, .preset-btn.active, .source-btn.active { color:#17210f; background:#a7ff68; border-color:#d9ff9f; text-shadow:none; }
   .action-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .source-controls { display:grid; grid-template-columns: 1fr auto; gap: 8px; }
   .source-controls input, #apiKey { min-width:0; background:#10140e; border:2px solid rgba(216,189,114,.5); color:#ffeeb4; border-radius:6px; padding:10px; }
   #apiKey { width:100%; margin-top:8px; }
   .drop-zone { margin-top:10px; border:2px dashed rgba(216,189,114,.46); padding:12px; border-radius:10px; font-size:12px; color:#dcc98a; }
+  .channel-options { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; align-items: stretch; }
+  .mini-readout { margin-top:8px; color:#7dff5a; font-size:12px; }
 
   .status-bar { margin-top: 18px; background:#10140e; border:3px solid #2c321e; border-radius:10px; padding:12px 14px; display:flex; gap:12px; align-items:center; justify-content:space-between; min-height:58px; }
   .now { color:#7dff5a; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
@@ -332,13 +326,28 @@
         </div>
 
         <div class="section">
-          <label>ROYALTY-FREE SOURCE CLIPS</label>
+          <label>FREE CHANNEL HUNTER</label>
+          <div class="source-grid" id="freeSourceGrid"></div>
+          <div class="channel-options">
+            <select id="maxChannels" aria-label="Maximum channels">
+              <option value="12">12 channels</option>
+              <option value="25" selected>25 channels</option>
+              <option value="50">50 channels</option>
+              <option value="100">100 channels</option>
+            </select>
+            <button class="source-btn" id="loadArchive">Load Free Channels</button>
+          </div>
+          <div class="mini-readout" id="channelCount">3 channels loaded</div>
+          <div class="drop-zone">Uses Internet Archive searches and playable MP4 files. Some archive items may fail or load slowly, so DizzyGlitch skips bad channels and keeps going.</div>
+        </div>
+
+        <div class="section">
+          <label>PEXELS SOURCE CLIPS</label>
           <div class="source-controls">
             <input id="searchTerm" value="retro night city" aria-label="Search term" />
             <button class="source-btn" id="fetchPexels">Fetch Clips</button>
           </div>
           <input id="apiKey" placeholder="Optional Pexels API key" aria-label="Pexels API key" />
-          <div class="drop-zone">No key needed for built-in demo channels. Add a Pexels API key for live royalty-free clip search.</div>
         </div>
 
         <div class="section action-grid">
@@ -364,10 +373,13 @@
   const effectsEl = document.getElementById("effects");
   const timeGrid = document.getElementById("timeGrid");
   const presetGrid = document.getElementById("presetGrid");
+  const freeSourceGrid = document.getElementById("freeSourceGrid");
   const intensity = document.getElementById("intensity");
   const intensityOut = document.getElementById("intensityOut");
   const apiKey = document.getElementById("apiKey");
   const searchTerm = document.getElementById("searchTerm");
+  const maxChannels = document.getElementById("maxChannels");
+  const channelCount = document.getElementById("channelCount");
 
   const CHANNEL_TIMES = [3, 5, 10, 15, 20, 30];
   let channelSeconds = Number(localStorage.getItem("dizzyglitchChannelSeconds")) || 10;
@@ -380,6 +392,7 @@
   let autoplay = true;
   let shuffle = true;
   let activePreset = "Heavy Glitch";
+  let activeFreeSource = "Public Domain Mix";
 
   const builtInChannels = [
     { title: "CH 01 DREAM FEED", url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", source: "MDN CC0 sample" },
@@ -388,6 +401,15 @@
   ];
 
   let channels = [...builtInChannels];
+
+  const freeSources = {
+    "Public Domain Mix": 'mediatype:movies AND (collection:prelinger OR collection:classic_tv OR collection:feature_films) AND format:"512Kb MPEG4"',
+    "Prelinger": 'collection:prelinger AND mediatype:movies AND format:"512Kb MPEG4"',
+    "Vintage Ads": 'collection:prelinger AND mediatype:movies AND (advertising OR commercial OR television) AND format:"512Kb MPEG4"',
+    "Noir Night": 'collection:feature_films AND mediatype:movies AND (noir OR night OR crime OR mystery) AND format:"512Kb MPEG4"',
+    "NASA Signal": 'collection:nasa AND mediatype:movies AND format:"512Kb MPEG4"',
+    "Odd Signal": 'mediatype:movies AND (experimental OR educational OR training OR surreal) AND format:"512Kb MPEG4"'
+  };
 
   const effects = [
     { key: "glitch", label: "GLITCH", value: 60, active: true },
@@ -410,6 +432,11 @@
 
   const padChannel = n => String(n).padStart(2, "0");
   const setStatus = text => statusEl.textContent = text;
+  const shuffleArray = arr => [...arr].sort(() => Math.random() - .5);
+
+  function updateChannelCount() {
+    channelCount.textContent = `${channels.length} channels loaded`;
+  }
 
   function renderBars() {
     const bars = document.getElementById("bars");
@@ -455,6 +482,22 @@
       btn.classList.toggle("active", activePreset === name);
       btn.addEventListener("click", () => applyPreset(name));
       presetGrid.appendChild(btn);
+    });
+  }
+
+  function renderFreeSources() {
+    freeSourceGrid.innerHTML = "";
+    Object.keys(freeSources).forEach(name => {
+      const btn = document.createElement("button");
+      btn.className = "source-btn";
+      btn.textContent = name;
+      btn.classList.toggle("active", activeFreeSource === name);
+      btn.addEventListener("click", () => {
+        activeFreeSource = name;
+        renderFreeSources();
+        setStatus(`Free source set to ${name}`);
+      });
+      freeSourceGrid.appendChild(btn);
     });
   }
 
@@ -557,6 +600,13 @@
           try { video.currentTime = Math.random() * Math.max(0, video.duration - 12); } catch {}
         }
       }, { once: true });
+      video.addEventListener("error", () => {
+        setStatus("Channel failed, skipping");
+        channels = channels.filter(item => item.url !== channel.url);
+        updateChannelCount();
+        scheduleNext();
+        setTimeout(() => changeChannel(), 600);
+      }, { once: true });
       try { await video.play(); } catch { setStatus("Tap Change Channel if autoplay is blocked"); }
     }, 260);
 
@@ -570,12 +620,76 @@
     timer = setTimeout(() => changeChannel(), channelSeconds * 1000);
   }
 
+  function buildAdvancedSearchUrl(query, rows) {
+    const params = new URLSearchParams();
+    params.set("q", query);
+    params.set("fl[]", "identifier");
+    params.append("fl[]", "title");
+    params.append("fl[]", "creator");
+    params.set("sort[]", "downloads desc");
+    params.set("rows", String(rows));
+    params.set("page", "1");
+    params.set("output", "json");
+    return `https://archive.org/advancedsearch.php?${params.toString()}`;
+  }
+
+  async function findPlayableArchiveFile(identifier) {
+    const res = await fetch(`https://archive.org/metadata/${encodeURIComponent(identifier)}`);
+    if (!res.ok) throw new Error(`metadata ${res.status}`);
+    const data = await res.json();
+    const files = Array.isArray(data.files) ? data.files : [];
+    const mp4Files = files.filter(file => String(file.name || "").toLowerCase().endsWith(".mp4"));
+    const preferred = mp4Files.find(file => String(file.format || "").toLowerCase().includes("512kb"))
+      || mp4Files.find(file => String(file.name || "").toLowerCase().includes("512kb"))
+      || mp4Files.find(file => String(file.format || "").toLowerCase().includes("mpeg4"))
+      || mp4Files[0];
+    if (!preferred) throw new Error("no mp4");
+    return `https://archive.org/download/${encodeURIComponent(identifier)}/${encodeURIComponent(preferred.name)}`;
+  }
+
+  async function loadArchiveChannels() {
+    const limit = Number(maxChannels.value) || 25;
+    const query = freeSources[activeFreeSource];
+    const rows = Math.min(160, Math.max(limit * 3, 30));
+    setStatus(`Searching ${activeFreeSource}...`);
+
+    try {
+      const res = await fetch(buildAdvancedSearchUrl(query, rows));
+      if (!res.ok) throw new Error(`Archive search HTTP ${res.status}`);
+      const data = await res.json();
+      const docs = shuffleArray(data?.response?.docs || []).filter(doc => doc.identifier);
+      const found = [];
+
+      for (const doc of docs) {
+        if (found.length >= limit) break;
+        try {
+          setStatus(`Resolving free channels ${found.length + 1}/${limit}...`);
+          const url = await findPlayableArchiveFile(doc.identifier);
+          found.push({
+            title: doc.title || doc.identifier,
+            url,
+            source: `Internet Archive • ${activeFreeSource}`
+          });
+        } catch {}
+      }
+
+      if (!found.length) throw new Error("No playable MP4 channels found");
+      channels = [...found, ...builtInChannels];
+      channelIndex = 0;
+      updateChannelCount();
+      setStatus(`Loaded ${found.length} free Archive channels`);
+      changeChannel(0);
+    } catch (error) {
+      setStatus(`Archive load failed: ${error.message}`);
+    }
+  }
+
   async function fetchPexelsVideos() {
     const key = apiKey.value.trim();
-    if (!key) { setStatus("Paste a Pexels API key first, or keep using built-in clips"); return; }
+    if (!key) { setStatus("Paste a Pexels API key first, or use Free Channel Hunter"); return; }
     localStorage.setItem("dizzyglitchPexelsKey", key);
     const query = encodeURIComponent(searchTerm.value.trim() || "retro night city");
-    setStatus("Fetching royalty-free clips from Pexels…");
+    setStatus("Fetching royalty-free clips from Pexels...");
     try {
       const res = await fetch(`https://api.pexels.com/videos/search?query=${query}&per_page=12&orientation=landscape`, { headers: { Authorization: key } });
       if (!res.ok) throw new Error(`Pexels HTTP ${res.status}`);
@@ -587,6 +701,7 @@
       if (!pexels.length) throw new Error("No playable MP4 clips returned");
       channels = [...pexels, ...builtInChannels];
       channelIndex = 0;
+      updateChannelCount();
       setStatus(`Loaded ${pexels.length} Pexels clips`);
       changeChannel(0);
     } catch (error) { setStatus(`Pexels fetch failed: ${error.message}`); }
@@ -596,6 +711,7 @@
     nextBtn.addEventListener("click", () => changeChannel());
     intensity.addEventListener("input", () => { activePreset = "Custom"; renderPresets(); applyEffects(); });
     document.getElementById("fetchPexels").addEventListener("click", fetchPexelsVideos);
+    document.getElementById("loadArchive").addEventListener("click", loadArchiveChannels);
 
     const autoplayBtn = document.getElementById("autoplayBtn");
     autoplayBtn.addEventListener("click", () => {
@@ -631,11 +747,13 @@
   renderBars();
   renderEffects();
   renderPresets();
+  renderFreeSources();
   renderTimes();
   wireButtons();
   apiKey.value = localStorage.getItem("dizzyglitchPexelsKey") || "";
   applyPreset(activePreset);
   startCountdown();
+  updateChannelCount();
   changeChannel(0);
 </script>
 </body>
