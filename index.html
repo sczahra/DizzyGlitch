@@ -284,7 +284,7 @@
             <aside class="speaker" aria-hidden="true"></aside>
             <div class="crt-shell">
               <div class="screen" id="screen">
-                <video id="video" muted playsinline autoplay loop crossorigin="anonymous"></video>
+                <video id="video" muted playsinline autoplay loop></video>
                 <div class="glitch-layer" id="glitchLayer"></div>
                 <div class="black-flash"></div>
                 <div class="tune-burst"></div>
@@ -335,10 +335,10 @@
               <option value="50">50 channels</option>
               <option value="100">100 channels</option>
             </select>
-            <button class="source-btn" id="loadArchive">Load Free Channels</button>
+            <button class="source-btn" id="loadArchive">Find Good Channels</button>
           </div>
           <div class="mini-readout" id="channelCount">3 channels loaded</div>
-          <div class="drop-zone">Uses Internet Archive searches and playable MP4 files. Some archive items may fail or load slowly, so DizzyGlitch skips bad channels and keeps going.</div>
+          <div class="drop-zone">This version validates channels before adding them, so failed Archive videos should not become skip-only channels. Bigger lists can take a while because each channel is tested first.</div>
         </div>
 
         <div class="section">
@@ -393,6 +393,7 @@
   let shuffle = true;
   let activePreset = "Heavy Glitch";
   let activeFreeSource = "Public Domain Mix";
+  let archiveLoadToken = 0;
 
   const builtInChannels = [
     { title: "CH 01 DREAM FEED", url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", source: "MDN CC0 sample" },
@@ -434,9 +435,7 @@
   const setStatus = text => statusEl.textContent = text;
   const shuffleArray = arr => [...arr].sort(() => Math.random() - .5);
 
-  function updateChannelCount() {
-    channelCount.textContent = `${channels.length} channels loaded`;
-  }
+  function updateChannelCount() { channelCount.textContent = `${channels.length} channels loaded`; }
 
   function renderBars() {
     const bars = document.getElementById("bars");
@@ -601,7 +600,7 @@
         }
       }, { once: true });
       video.addEventListener("error", () => {
-        setStatus("Channel failed, skipping");
+        setStatus("Channel failed once, removing it");
         channels = channels.filter(item => item.url !== channel.url);
         updateChannelCount();
         scheduleNext();
@@ -620,6 +619,16 @@
     timer = setTimeout(() => changeChannel(), channelSeconds * 1000);
   }
 
+  async function fetchWithTimeout(url, timeoutMs = 9000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(id);
+    }
+  }
+
   function buildAdvancedSearchUrl(query, rows) {
     const params = new URLSearchParams();
     params.set("q", query);
@@ -633,54 +642,106 @@
     return `https://archive.org/advancedsearch.php?${params.toString()}`;
   }
 
-  async function findPlayableArchiveFile(identifier) {
-    const res = await fetch(`https://archive.org/metadata/${encodeURIComponent(identifier)}`);
+  function probeVideoUrl(url, timeoutMs = 6500) {
+    return new Promise(resolve => {
+      const probe = document.createElement("video");
+      let done = false;
+      const finish = ok => {
+        if (done) return;
+        done = true;
+        clearTimeout(timerId);
+        probe.removeAttribute("src");
+        probe.load();
+        resolve(ok);
+      };
+      const timerId = setTimeout(() => finish(false), timeoutMs);
+      probe.muted = true;
+      probe.playsInline = true;
+      probe.preload = "metadata";
+      probe.onloadedmetadata = () => finish(true);
+      probe.onerror = () => finish(false);
+      probe.src = url;
+      probe.load();
+    });
+  }
+
+  function archiveDownloadUrl(identifier, fileName) {
+    return `https://archive.org/download/${encodeURIComponent(identifier)}/${fileName.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  async function resolveValidatedArchiveChannel(doc) {
+    const identifier = doc.identifier;
+    const res = await fetchWithTimeout(`https://archive.org/metadata/${encodeURIComponent(identifier)}`, 9000);
     if (!res.ok) throw new Error(`metadata ${res.status}`);
     const data = await res.json();
     const files = Array.isArray(data.files) ? data.files : [];
-    const mp4Files = files.filter(file => String(file.name || "").toLowerCase().endsWith(".mp4"));
-    const preferred = mp4Files.find(file => String(file.format || "").toLowerCase().includes("512kb"))
-      || mp4Files.find(file => String(file.name || "").toLowerCase().includes("512kb"))
-      || mp4Files.find(file => String(file.format || "").toLowerCase().includes("mpeg4"))
-      || mp4Files[0];
-    if (!preferred) throw new Error("no mp4");
-    return `https://archive.org/download/${encodeURIComponent(identifier)}/${encodeURIComponent(preferred.name)}`;
+    const mp4Files = files
+      .filter(file => String(file.name || "").toLowerCase().endsWith(".mp4"))
+      .sort((a, b) => {
+        const an = String(a.name || "").toLowerCase();
+        const bn = String(b.name || "").toLowerCase();
+        const aScore = (an.includes("512kb") ? 0 : 10) + (Number(a.size) || 999999999) / 1000000000;
+        const bScore = (bn.includes("512kb") ? 0 : 10) + (Number(b.size) || 999999999) / 1000000000;
+        return aScore - bScore;
+      });
+
+    for (const file of mp4Files.slice(0, 4)) {
+      const url = archiveDownloadUrl(identifier, file.name);
+      const ok = await probeVideoUrl(url);
+      if (ok) {
+        return {
+          title: doc.title || identifier,
+          url,
+          source: `Internet Archive • ${activeFreeSource}`
+        };
+      }
+    }
+    throw new Error("no playable tested mp4");
   }
 
   async function loadArchiveChannels() {
+    const token = ++archiveLoadToken;
     const limit = Number(maxChannels.value) || 25;
     const query = freeSources[activeFreeSource];
-    const rows = Math.min(160, Math.max(limit * 3, 30));
+    const rows = Math.min(360, Math.max(limit * 5, 60));
+    const loadButton = document.getElementById("loadArchive");
+    loadButton.disabled = true;
+    loadButton.textContent = "Testing...";
     setStatus(`Searching ${activeFreeSource}...`);
 
     try {
-      const res = await fetch(buildAdvancedSearchUrl(query, rows));
+      const res = await fetchWithTimeout(buildAdvancedSearchUrl(query, rows), 12000);
       if (!res.ok) throw new Error(`Archive search HTTP ${res.status}`);
       const data = await res.json();
       const docs = shuffleArray(data?.response?.docs || []).filter(doc => doc.identifier);
       const found = [];
+      let tested = 0;
 
       for (const doc of docs) {
+        if (token !== archiveLoadToken) return;
         if (found.length >= limit) break;
+        tested += 1;
+        setStatus(`Testing Archive clips ${found.length}/${limit} good, ${tested}/${docs.length} checked...`);
         try {
-          setStatus(`Resolving free channels ${found.length + 1}/${limit}...`);
-          const url = await findPlayableArchiveFile(doc.identifier);
-          found.push({
-            title: doc.title || doc.identifier,
-            url,
-            source: `Internet Archive • ${activeFreeSource}`
-          });
+          const channel = await resolveValidatedArchiveChannel(doc);
+          found.push(channel);
+          channels = [...found, ...builtInChannels];
+          updateChannelCount();
+          if (found.length === 1) changeChannel(0);
         } catch {}
       }
 
-      if (!found.length) throw new Error("No playable MP4 channels found");
+      if (!found.length) throw new Error("No browser-playable MP4 channels found");
       channels = [...found, ...builtInChannels];
       channelIndex = 0;
       updateChannelCount();
-      setStatus(`Loaded ${found.length} free Archive channels`);
+      setStatus(`Loaded ${found.length} tested-good Archive channels`);
       changeChannel(0);
     } catch (error) {
       setStatus(`Archive load failed: ${error.message}`);
+    } finally {
+      loadButton.disabled = false;
+      loadButton.textContent = "Find Good Channels";
     }
   }
 
