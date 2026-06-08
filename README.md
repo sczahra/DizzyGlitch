@@ -1,6 +1,6 @@
 # DizzyGlitch
 
-DizzyGlitch is a retro CRT channel-surfing video visualizer. It plays royalty-free source clips, layers VHS/glitch/scanline/pixel effects over them, and lets you control how often the app changes channels.
+DizzyGlitch is a retro CRT channel-surfing video visualizer. It plays free source clips, layers VHS/glitch/scanline/pixel effects over them, and lets you control how often the app changes channels.
 
 ## Current prototype
 
@@ -15,6 +15,7 @@ This browser-based prototype includes:
 - Manual channel changing
 - Visual presets: Soft VHS, Heavy Glitch, Pixel Dream, CRT Burn, and Haunted Cable
 - Keyboard shortcuts for quick testing
+- Free Channel Hunter powered by Internet Archive searches
 - Optional Pexels API support for royalty-free video search
 - Built-in demo channels as a fallback
 
@@ -29,6 +30,21 @@ npm run dev
 
 Then open the local Vite URL shown in your terminal.
 
+## Free Channel Hunter
+
+The app can search Internet Archive from the browser and build a channel list from playable MP4 files.
+
+Built-in source groups:
+
+- Public Domain Mix
+- Prelinger
+- Vintage Ads
+- Noir Night
+- NASA Signal
+- Odd Signal
+
+You can choose 12, 25, 50, or 100 channels. Some archive items may fail, move slowly, or have unusual metadata, so the app skips bad channels and keeps loading what it can.
+
 ## Keyboard shortcuts
 
 - Right Arrow: change channel
@@ -36,9 +52,9 @@ Then open the local Vite URL shown in your terminal.
 - R: random preset
 - F: fullscreen
 
-## Using royalty-free clips
+## Using Pexels clips
 
-DizzyGlitch can search Pexels video clips from the browser.
+DizzyGlitch can also search Pexels video clips from the browser.
 
 1. Get a Pexels API key.
 2. Open the app.
@@ -49,4 +65,4 @@ The key is stored in your browser local storage for convenience. Do not commit p
 
 ## Notes
 
-This is still a prototype scaffold. The visual system is intentionally simple right now so the core idea can be tested quickly before adding heavier shader, canvas, WebGL, local file import, or export features.
+This is still a prototype scaffold. The visual system is intentionally simple right now so the core idea can be tested quickly before adding heavier shader, canvas, WebGL, local file import, export features, or a dedicated backend clip index.
